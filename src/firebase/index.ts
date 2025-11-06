@@ -5,28 +5,15 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
-export function initializeFirebase(): ReturnType<typeof getSdks> {
-  let firebaseApp: FirebaseApp;
-
-  // If app is already initialized, return it
-  if (getApps().length) {
-    return getSdks(getApp());
+export function initializeFirebase() {
+  if (!getApps().length) {
+    const firebaseApp = initializeApp(firebaseConfig);
+    return getSdks(firebaseApp);
   }
 
-  try {
-    // ✅ For Firebase Hosting (usually fails on Vercel)
-    firebaseApp = initializeApp();
-  } catch (e) {
-    // ✅ For Localhost or Vercel
-    console.warn(
-      'Automatic initialization failed. Falling back to firebase config object.',
-      e
-    );
-    firebaseApp = initializeApp(firebaseConfig);
-  }
-
-  return getSdks(firebaseApp);
+  return getSdks(getApp());
 }
+
 
 function getSdks(firebaseApp: FirebaseApp) {
   return {
