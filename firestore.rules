@@ -1,0 +1,82 @@
+/**
+ * @fileOverview Firestore Security Rules for BharatVest application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for all data. Each user has exclusive access to their profile and work history.
+ *
+ * Data Structure:
+ * All data is nested under /users/{userId} or keyed by userId, ensuring that each user's data is isolated.
+ *
+ * Key Security Decisions:
+ * - User listing is implicitly disallowed.
+ * - Read-only collections are not present in this model.
+ * - Ambiguous relationships default to owner-only access.
+ *
+ * Denormalization for Authorization:
+ * The data model is designed to achieve authorization independence. All data necessary to authorize a request is available within the document being accessed or its direct path. This avoids costly and complex `get()` operations in the rules.
+ *
+ * Structural Segregation:
+ * The use of user-specific subcollections and paths ensures that private data remains isolated and simplifies access control.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Enforces access control for user profiles. Only the authenticated user can read or modify their own profile.
+     * @path /users/{userId}
+     * @allow (create) User with ID 'user123' can create their profile.
+     *  - Request: { auth: { uid: 'user123' }, resource.data: { id: 'user123', googleId: 'google123', email: 'test@example.com', displayName: 'Test User' } }
+     * @allow (get, update, delete) User with ID 'user123' can get, update, or delete their profile.
+     *  - Request: { auth: { uid: 'user123' } }
+     * @deny (create, get, update, delete) User with ID 'user456' cannot access user 'user123' profile.
+     *  - Request: { auth: { uid: 'user456' } }
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+                   && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId)
+                    && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+    
+    /**
+     * @description Controls access to user-editable profiles. Users can create, read, and update their own profile.
+     * @path /profiles/{userId}
+     */
+    match /profiles/{userId} {
+      allow get, create, update: if isOwner(userId);
+      allow list, delete: if false;
+    }
+
+    /**
+     * @description Enforces access control for user's work history entries. Only the authenticated user can manage their own work history.
+     * @path /users/{userId}/workHistory/{workHistoryId}
+     * @allow (create) User 'user123' can create a new work history entry.
+     *  - Request: { auth: { uid: 'user123' }, resource.data: { userId: 'user123', timestamp: '2024-01-01T00:00:00Z', activityType: 'Stock Analysis', details: 'Analyzed TSLA' } }
+     * @allow (get, update, delete) User 'user123' can get, update, or delete their own work history entry.
+     *  - Request: { auth: { uid: 'user123' } }
+     * @deny (create, get, update, delete) User 'user456' cannot access user 'user123' work history.
+     *  - Request: { auth: { uid: 'user456' } }
+     * @principle Restricts access to a user's own work history entries based on document ownership.
+     */
+    match /users/{userId}/workHistory/{workHistoryId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId)
+                   && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId)
+                   && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}

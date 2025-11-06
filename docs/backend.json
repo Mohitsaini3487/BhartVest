@@ -1,0 +1,161 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the BharatVest application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "googleId": {
+          "type": "string",
+          "description": "The Google ID of the user, used for authentication."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "profilePictureUrl": {
+          "type": "string",
+          "description": "URL of the user's profile picture.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "googleId",
+        "email",
+        "displayName"
+      ]
+    },
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Extends the base User entity with additional editable profile information.",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Editable display name of the user."
+        },
+        "bio": {
+          "type": "string",
+          "description": "A short bio or description for the user."
+        }
+      },
+      "required": [
+        "displayName"
+      ]
+    },
+    "WorkHistory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WorkHistory",
+      "type": "object",
+      "description": "Represents a user's work history or activity within the BharatVest application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the WorkHistory entry."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N WorkHistory)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of the activity.",
+          "format": "date-time"
+        },
+        "activityType": {
+          "type": "string",
+          "description": "Type of activity performed (e.g., 'Stock Analysis', 'Trade Simulation')."
+        },
+        "details": {
+          "type": "string",
+          "description": "Detailed description of the activity performed."
+        },
+        "result": {
+            "type": "object",
+            "description": "The full result object from the AI generation."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "timestamp",
+        "activityType",
+        "details"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "google.com"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information. Each user document is uniquely identified by their userId. Includes the user's googleId, email, displayName, and profilePictureUrl.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/workHistory/{workHistoryId}",
+        "definition": {
+          "entityName": "WorkHistory",
+          "schema": {
+            "$ref": "#/backend/entities/WorkHistory"
+          },
+          "description": "Stores the work history of each user. Includes userId, timestamp, activityType, and details of the work history entry. This path enforces that only the user can access their own work history entries.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            },
+            {
+              "name": "workHistoryId",
+              "description": "Unique identifier for the work history entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/profiles/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores additional, user-editable profile information like bio. Path-based ownership ensures only the authenticated user can modify their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user, linking to the main user object."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the BharatVest application's features, focusing on user authentication via Google, storing user profiles, and tracking work history. This structure enables Authorization Independence by storing all user-specific data under the `/users/{userId}` path, eliminating the need for cross-document `get()` calls. The segregation of data into collections like `/users/{userId}/workHistory` maintains a homogeneous security posture. The path-based ownership (`/users/{userId}/workHistory`) ensures that security rules can be simply defined based on the user's ID. A new `/profiles/{userId}` collection is added to store mutable user profile data like 'bio', separating it from the core, less frequently changed authentication data in `/users/{userId}`. This separation improves security and data organization. Authorization Independence is further ensured by storing all user-related data directly under their respective user IDs, removing any dependency on parent document data for authorization. This supports atomic operations and enhances debuggability. QAPs (Rules are not Filters) are supported through data segregation. User profiles and work history are stored in separate collections under each user's document, ensuring that listing operations can be performed securely without exposing data from other users or requiring filtering based on user roles. The design incorporates the use of hierarchical paths for user-owned data. Each user has a dedicated section in the database where their data (profile and work history) are stored. This structure allows for efficient querying and ensures that security rules can be applied consistently across all user-related data. The structure supports the integrity of ownership, timestamps, and data consistency. The path `/users/{userId}/workHistory` clearly establishes ownership, and each work history entry includes a timestamp. Data consistency is maintained by storing all relevant data within the user's document or subcollections."
+  }
+}
